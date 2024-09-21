@@ -1,18 +1,20 @@
 package main
 
 import (
-	"flag"
-	"fmt"
+	"log"
+
+	teaModels "github.com/alisherkarim/cli-chat/tea-models"
+	tea "github.com/charmbracelet/bubbletea"
 )
 
+func createState() teaModels.AppState {
+	return teaModels.AppState{}
+}
+
 func main() {
-	var (
-		room   string
-	)
+	p := tea.NewProgram(teaModels.CreateEntryModel(), tea.WithAltScreen())
 
-	flag.StringVar(&room, "room", "c123456", "Room code")
-	flag.Parse()
-
-	fmt.Printf("Joining room %s...\n", room)
-	fmt.Printf("You have joined room #%s successfully\n", room)
+	if _, err := p.Run(); err != nil {
+		log.Fatal(err)
+	}
 }
