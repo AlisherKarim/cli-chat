@@ -1,9 +1,11 @@
 package teamodels
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 
+	"github.com/alisherkarim/cli-chat/env"
 	"github.com/alisherkarim/cli-chat/utils"
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/textinput"
@@ -11,32 +13,30 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-var (
-	errorStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#ff3333"))
-	successStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#1e720a"))
-)
-
 type responseMsg struct{
 	res string
 }
 
+type errorMsg struct {
+	err error
+}
+
 type RegisterModel struct {
+	env *env.Env
 	prevPage tea.Model
 	focusIndex int
 	inputs     []textinput.Model
 	errorMessage string
 	isRequesting bool
 	loadingSpinner  spinner.Model
-	res string
-	ch chan responseMsg
 }
 
-func CreateRegisterModel(prevPage tea.Model) RegisterModel {
+func CreateRegisterModel(env *env.Env, prevPage tea.Model) RegisterModel {
 	m := RegisterModel{
-		isRequesting: false,
-		loadingSpinner: spinner.New(),
-		inputs: make([]textinput.Model, 3),
+		env: env,
 		prevPage: prevPage,
+		inputs: make([]textinput.Model, 3),
+		loadingSpinner: spinner.New(),
 	}
 
 	m.loadingSpinner.Spinner = spinner.Points
@@ -95,9 +95,10 @@ func (m RegisterModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if s == "enter" && m.focusIndex == len(m.inputs) {
 				if m.CheckInputs() {
 					m.isRequesting = true
-					return m, m.RequestRegister()
+					go m.RequestRegister()
+					return m, nil
 				}
-				return m.prevPage, nil
+				return m, nil
 			}
 
 			// Cycle indexes
@@ -136,7 +137,11 @@ func (m RegisterModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, cmd
 	case responseMsg:
 		m.isRequesting = false
-		return m.prevPage, nil
+		return CreateChatModel(m.env, m), nil
+	case errorMsg:
+		m.errorMessage = msg.err.Error()
+		m.isRequesting = false
+		return m, nil
 	}
 	// Handle character input and blinking
 	cmd := m.updateInputs(msg)
@@ -179,14 +184,10 @@ func (m RegisterModel) View() string {
 	}
 
 	if m.errorMessage != "" {
-		b.WriteString(errorStyle.Render(fmt.Sprintf("\n%s", m.errorMessage)))
+		b.WriteString(utils.ErrorStyle.Render(fmt.Sprintf("\n%s", m.errorMessage)))
 	}
 
-	if m.res != "" {
-		b.WriteString(successStyle.Render(fmt.Sprintf("\n%s", m.res)))
-	}
-
-	b.WriteString(helpStyle.Render("\n\nesc to go back"))
+	b.WriteString(utils.HelpStyle.Render("\n\nesc to go back"))
 
 	return b.String()
 }
@@ -206,23 +207,22 @@ func (m *RegisterModel) CheckInputs() bool {
 	return true
 }
 
-func (m *RegisterModel) RequestRegister() tea.Cmd {
-	return func() tea.Msg {
-		res, err := utils.Register(m.inputs[0].Value(), m.inputs[1].Value(), m.inputs[2].Value())
-		fmt.Printf("res %s", res)
-		if err != nil {
-			m.errorMessage = "Something went wrong while requesting. Please, try again"
-		}
-		return responseMsg{res: res}
-	}
-}
-
-func (m *RegisterModel) waitForResponse() {
+func (m *RegisterModel) RequestRegister() {
 	res, err := utils.Register(m.inputs[0].Value(), m.inputs[1].Value(), m.inputs[2].Value())
-	fmt.Printf("res %s", res)
 	if err != nil {
 		m.errorMessage = "Something went wrong while requesting. Please, try again"
+		m.env.CurrentProgram.Send(errorMsg{err: err})
+		return
+	}
+	
+	var data map[string]string
+	err = json.Unmarshal([]byte(res), &data)
+	if err != nil {
+		m.errorMessage = "Something went wrong while requesting. Please, try again"
+		m.env.CurrentProgram.Send(errorMsg{err: err})
+		return
 	}
 
-	m.Update(responseMsg{res: res})
+	m.env.SetUser(data["username"], data["email"])
+	m.env.CurrentProgram.Send(responseMsg{res: res})
 }

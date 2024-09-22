@@ -3,11 +3,13 @@ package teamodels
 import (
 	"fmt"
 
+	"github.com/alisherkarim/cli-chat/env"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
 
 type EntryModel struct {
+	env *env.Env
 	options []string 
 	selectedOptionIndex int
 }
@@ -17,8 +19,9 @@ var (
 	defaultOptionStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("69"))
 )
 
-func CreateEntryModel() EntryModel {
+func CreateEntryModel(env *env.Env) EntryModel {
 	return EntryModel{
+		env: env,
 		options: []string{"Login", "Register"},
 		selectedOptionIndex: 0,
 	}
@@ -67,8 +70,8 @@ func (state EntryModel) View() string {
 
 func (state EntryModel) OpenSelectedModel() tea.Model {
 	if state.selectedOptionIndex == 0 {
-		return CreateLoginModel(state)
+		return CreateLoginModel(state.env, state)
 	} else {
-		return CreateRegisterModel(state)
+		return CreateRegisterModel(state.env, state)
 	}
 }

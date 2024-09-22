@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/alisherkarim/cli-chat/env"
+	"github.com/alisherkarim/cli-chat/utils"
 	"github.com/charmbracelet/bubbles/cursor"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
@@ -25,15 +27,19 @@ var (
 )
 
 type LoginModel struct {
+	env *env.Env
 	prevPage tea.Model
 	focusIndex int
 	inputs     []textinput.Model
 	cursorMode cursor.Mode
+	errorMessage string
+	isRequesting bool
 }
 
-func CreateLoginModel(prevPage tea.Model) LoginModel {
+func CreateLoginModel(env *env.Env, prevPage tea.Model) LoginModel {
 	m := LoginModel{
-		inputs: make([]textinput.Model, 3),
+		env: env,
+		inputs: make([]textinput.Model, 2),
 		prevPage: prevPage,
 	}
 
@@ -45,14 +51,11 @@ func CreateLoginModel(prevPage tea.Model) LoginModel {
 
 		switch i {
 		case 0:
-			t.Placeholder = "Nickname"
+			t.Placeholder = "Username"
 			t.Focus()
 			t.PromptStyle = focusedStyle
 			t.TextStyle = focusedStyle
 		case 1:
-			t.Placeholder = "Email"
-			t.CharLimit = 64
-		case 2:
 			t.Placeholder = "Password"
 			t.EchoMode = textinput.EchoPassword
 			t.EchoCharacter = '•'
@@ -72,28 +75,18 @@ func (m LoginModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
-		case "ctrl+c", "esc":
+		case "ctrl+c":
 			return m, tea.Quit
-
-		// Change cursor mode
-		case "ctrl+r":
-			m.cursorMode++
-			if m.cursorMode > cursor.CursorHide {
-				m.cursorMode = cursor.CursorBlink
-			}
-			cmds := make([]tea.Cmd, len(m.inputs))
-			for i := range m.inputs {
-				cmds[i] = m.inputs[i].Cursor.SetMode(m.cursorMode)
-			}
-			return m, tea.Batch(cmds...)
-
-		// Set focus to next input
+		case "esc":
+			return m.prevPage, nil
 		case "tab", "shift+tab", "enter", "up", "down":
 			s := msg.String()
 
-			// Did the user press enter while the submit button was focused?
-			// If so, exit.
 			if s == "enter" && m.focusIndex == len(m.inputs) {
+				if m.CheckInputs() {
+					m.isRequesting = true
+					return m, m.RequestRegister()
+				}
 				return m.prevPage, nil
 			}
 
@@ -163,9 +156,35 @@ func (m LoginModel) View() string {
 	}
 	fmt.Fprintf(&b, "\n\n%s\n\n", *button)
 
-	b.WriteString(helpStyle.Render("cursor mode is "))
+	b.WriteString(utils.HelpStyle.Render("cursor mode is "))
 	b.WriteString(cursorModeHelpStyle.Render(m.cursorMode.String()))
-	b.WriteString(helpStyle.Render(" (ctrl+r to change style)"))
+	b.WriteString(utils.HelpStyle.Render(" (ctrl+r to change style)"))
 
 	return b.String()
+}
+
+
+// Helper methods
+
+func (m *LoginModel) CheckInputs() bool {
+	for _, v := range m.inputs {
+		if strings.TrimSpace(v.Value()) == "" {
+			m.errorMessage = "Please fill all the fields!"
+			return false
+		}
+	}
+
+	m.errorMessage = ""
+	return true
+}
+
+func (m *LoginModel) RequestRegister() tea.Cmd {
+	return func() tea.Msg {
+		res, err := utils.Register(m.inputs[0].Value(), m.inputs[1].Value(), m.inputs[2].Value())
+		fmt.Printf("res %s", res)
+		if err != nil {
+			m.errorMessage = "Something went wrong while requesting. Please, try again"
+		}
+		return responseMsg{res: res}
+	}
 }
