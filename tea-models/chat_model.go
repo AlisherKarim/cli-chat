@@ -40,8 +40,9 @@ func (m ChatModel) View() string {
 	var s string
 
 	if(m.env.GetUser().Username != "") {
-		s += utils.SuccessStyle.Render(fmt.Sprintf("Logged in as %s", m.env.GetUser().Username))
-		s += utils.SuccessStyle.Render(fmt.Sprintf("Email: %s", m.env.GetUser().Username))
+		s += utils.SuccessStyle.Render(fmt.Sprintf("\nLogged in as %s", m.env.GetUser().Username))
+		s += utils.SuccessStyle.Render(fmt.Sprintf("\nEmail: %s", m.env.GetUser().Email))
+		s += utils.SuccessStyle.Render(fmt.Sprintf("\nAccess Token: %s\n", m.env.GetSession().AccessToken))
 	}
 
 	return s

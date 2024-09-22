@@ -6,20 +6,12 @@ import (
 	"strings"
 
 	"github.com/alisherkarim/cli-chat/env"
+	"github.com/alisherkarim/cli-chat/types"
 	"github.com/alisherkarim/cli-chat/utils"
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 )
-
-type responseMsg struct{
-	res string
-}
-
-type errorMsg struct {
-	err error
-}
 
 type RegisterModel struct {
 	env *env.Env
@@ -40,20 +32,20 @@ func CreateRegisterModel(env *env.Env, prevPage tea.Model) RegisterModel {
 	}
 
 	m.loadingSpinner.Spinner = spinner.Points
-	m.loadingSpinner.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
+	m.loadingSpinner.Style = utils.LoadingSpinner
 
 	var t textinput.Model
 	for i := range m.inputs {
 		t = textinput.New()
-		t.Cursor.Style = cursorStyle
+		t.Cursor.Style = utils.CursorStyle
 		t.CharLimit = 32
 
 		switch i {
 		case 0:
 			t.Placeholder = "Nickname"
 			t.Focus()
-			t.PromptStyle = focusedStyle
-			t.TextStyle = focusedStyle
+			t.PromptStyle = utils.FocusedStyle
+			t.TextStyle = utils.FocusedStyle
 		case 1:
 			t.Placeholder = "Email"
 			t.CharLimit = 64
@@ -96,7 +88,6 @@ func (m RegisterModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if m.CheckInputs() {
 					m.isRequesting = true
 					go m.RequestRegister()
-					return m, nil
 				}
 				return m, nil
 			}
@@ -119,14 +110,14 @@ func (m RegisterModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if i == m.focusIndex {
 					// Set focused state
 					cmds[i] = m.inputs[i].Focus()
-					m.inputs[i].PromptStyle = focusedStyle
-					m.inputs[i].TextStyle = focusedStyle
+					m.inputs[i].PromptStyle = utils.FocusedStyle
+					m.inputs[i].TextStyle = utils.FocusedStyle
 					continue
 				}
 				// Remove focused state
 				m.inputs[i].Blur()
-				m.inputs[i].PromptStyle = noStyle
-				m.inputs[i].TextStyle = noStyle
+				m.inputs[i].PromptStyle = utils.NoStyle
+				m.inputs[i].TextStyle = utils.NoStyle
 			}
 
 			return m, tea.Batch(cmds...)
@@ -135,11 +126,11 @@ func (m RegisterModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		var cmd tea.Cmd
 		m.loadingSpinner, cmd = m.loadingSpinner.Update(msg)
 		return m, cmd
-	case responseMsg:
+	case types.ResponseMsg:
 		m.isRequesting = false
-		return CreateChatModel(m.env, m), nil
-	case errorMsg:
-		m.errorMessage = msg.err.Error()
+		return CreateLoginModel(m.env, m), nil
+	case types.ErrorMsg:
+		m.errorMessage = msg.Err.Error()
 		m.isRequesting = false
 		return m, nil
 	}
@@ -166,6 +157,10 @@ func (m *RegisterModel) updateInputs(msg tea.Msg) tea.Cmd {
 func (m RegisterModel) View() string {
 	var b strings.Builder
 
+	b.WriteString(utils.PageNameStyle.Render("\nRegister Page\n"))
+	b.WriteRune('\n')
+	b.WriteRune('\n')
+
 	for i := range m.inputs {
 		b.WriteString(m.inputs[i].View())
 		if i < len(m.inputs)-1 {
@@ -173,9 +168,9 @@ func (m RegisterModel) View() string {
 		}
 	}
 
-	button := &blurredButton
+	button := &utils.BlurredButton
 	if m.focusIndex == len(m.inputs) {
-		button = &focusedButton
+		button = &utils.FocusedButton
 	}
 	fmt.Fprintf(&b, "\n\n%s\n\n", *button)
 
@@ -211,7 +206,7 @@ func (m *RegisterModel) RequestRegister() {
 	res, err := utils.Register(m.inputs[0].Value(), m.inputs[1].Value(), m.inputs[2].Value())
 	if err != nil {
 		m.errorMessage = "Something went wrong while requesting. Please, try again"
-		m.env.CurrentProgram.Send(errorMsg{err: err})
+		m.env.CurrentProgram.Send(types.ErrorMsg{Err: err})
 		return
 	}
 	
@@ -219,10 +214,10 @@ func (m *RegisterModel) RequestRegister() {
 	err = json.Unmarshal([]byte(res), &data)
 	if err != nil {
 		m.errorMessage = "Something went wrong while requesting. Please, try again"
-		m.env.CurrentProgram.Send(errorMsg{err: err})
+		m.env.CurrentProgram.Send(types.ErrorMsg{Err: err})
 		return
 	}
 
 	m.env.SetUser(data["username"], data["email"])
-	m.env.CurrentProgram.Send(responseMsg{res: res})
+	m.env.CurrentProgram.Send(types.ResponseMsg{Res: res})
 }

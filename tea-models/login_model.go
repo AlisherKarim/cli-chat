@@ -4,26 +4,16 @@ package teamodels
 // from the Bubbles component library.
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 
 	"github.com/alisherkarim/cli-chat/env"
+	"github.com/alisherkarim/cli-chat/types"
 	"github.com/alisherkarim/cli-chat/utils"
-	"github.com/charmbracelet/bubbles/cursor"
+	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
-)
-
-var (
-	focusedStyle        = lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
-	blurredStyle        = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
-	cursorStyle         = focusedStyle
-	noStyle             = lipgloss.NewStyle()
-	cursorModeHelpStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("244"))
-
-	focusedButton = focusedStyle.Render("[ Submit ]")
-	blurredButton = fmt.Sprintf("[ %s ]", blurredStyle.Render("Submit"))
 )
 
 type LoginModel struct {
@@ -31,30 +21,35 @@ type LoginModel struct {
 	prevPage tea.Model
 	focusIndex int
 	inputs     []textinput.Model
-	cursorMode cursor.Mode
 	errorMessage string
 	isRequesting bool
+	loadingSpinner  spinner.Model
 }
 
 func CreateLoginModel(env *env.Env, prevPage tea.Model) LoginModel {
 	m := LoginModel{
 		env: env,
-		inputs: make([]textinput.Model, 2),
 		prevPage: prevPage,
+		inputs: make([]textinput.Model, 2),
+		loadingSpinner: spinner.New(),
 	}
+
+	m.loadingSpinner.Spinner = spinner.Points
+	m.loadingSpinner.Style = utils.LoadingSpinner
+
 
 	var t textinput.Model
 	for i := range m.inputs {
 		t = textinput.New()
-		t.Cursor.Style = cursorStyle
+		t.Cursor.Style = utils.CursorStyle
 		t.CharLimit = 32
 
 		switch i {
 		case 0:
 			t.Placeholder = "Username"
 			t.Focus()
-			t.PromptStyle = focusedStyle
-			t.TextStyle = focusedStyle
+			t.PromptStyle = utils.FocusedStyle
+			t.TextStyle = utils.FocusedStyle
 		case 1:
 			t.Placeholder = "Password"
 			t.EchoMode = textinput.EchoPassword
@@ -68,62 +63,77 @@ func CreateLoginModel(env *env.Env, prevPage tea.Model) LoginModel {
 }
 
 func (m LoginModel) Init() tea.Cmd {
-	return textinput.Blink
+	return tea.Batch(
+		m.loadingSpinner.Tick,
+		textinput.Blink,
+	)
 }
 
 func (m LoginModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
-	case tea.KeyMsg:
-		switch msg.String() {
-		case "ctrl+c":
-			return m, tea.Quit
-		case "esc":
-			return m.prevPage, nil
-		case "tab", "shift+tab", "enter", "up", "down":
-			s := msg.String()
+		case tea.KeyMsg:
+			switch msg.String() {
+				case "ctrl+c":
+					return m, tea.Quit
+				case "esc":
+					return m.prevPage, nil
+				case "tab", "shift+tab", "enter", "up", "down":
+					s := msg.String()
 
-			if s == "enter" && m.focusIndex == len(m.inputs) {
-				if m.CheckInputs() {
-					m.isRequesting = true
-					return m, m.RequestRegister()
+					if s == "enter" && m.focusIndex == len(m.inputs) {
+						if m.CheckInputs() {
+							m.isRequesting = true
+							go m.RequestLogin()
+						}
+						return m, nil
+					}
+
+					// Cycle indexes
+					if s == "up" || s == "shift+tab" {
+						m.focusIndex--
+					} else {
+						m.focusIndex++
+					}
+
+					if m.focusIndex > len(m.inputs) {
+						m.focusIndex = 0
+					} else if m.focusIndex < 0 {
+						m.focusIndex = len(m.inputs)
+					}
+
+					cmds := make([]tea.Cmd, len(m.inputs))
+					for i := 0; i <= len(m.inputs)-1; i++ {
+						if i == m.focusIndex {
+							// Set focused state
+							cmds[i] = m.inputs[i].Focus()
+							m.inputs[i].PromptStyle = utils.FocusedStyle
+							m.inputs[i].TextStyle = utils.FocusedStyle
+							continue
+						}
+						// Remove focused state
+						m.inputs[i].Blur()
+						m.inputs[i].PromptStyle = utils.NoStyle
+						m.inputs[i].TextStyle = utils.NoStyle
+					}
+
+					return m, tea.Batch(cmds...)
 				}
-				return m.prevPage, nil
-			}
-
-			// Cycle indexes
-			if s == "up" || s == "shift+tab" {
-				m.focusIndex--
-			} else {
-				m.focusIndex++
-			}
-
-			if m.focusIndex > len(m.inputs) {
-				m.focusIndex = 0
-			} else if m.focusIndex < 0 {
-				m.focusIndex = len(m.inputs)
-			}
-
-			cmds := make([]tea.Cmd, len(m.inputs))
-			for i := 0; i <= len(m.inputs)-1; i++ {
-				if i == m.focusIndex {
-					// Set focused state
-					cmds[i] = m.inputs[i].Focus()
-					m.inputs[i].PromptStyle = focusedStyle
-					m.inputs[i].TextStyle = focusedStyle
-					continue
-				}
-				// Remove focused state
-				m.inputs[i].Blur()
-				m.inputs[i].PromptStyle = noStyle
-				m.inputs[i].TextStyle = noStyle
-			}
-
-			return m, tea.Batch(cmds...)
-		}
+		case spinner.TickMsg:
+			var cmd tea.Cmd
+			m.loadingSpinner, cmd = m.loadingSpinner.Update(msg)
+			return m, cmd
+		case types.ResponseMsg:
+			m.isRequesting = false
+			return CreateChatModel(m.env, m), nil
+		case types.ErrorMsg:
+			m.errorMessage = msg.Err.Error()
+			m.isRequesting = false
+			return m, nil
 	}
 
 	// Handle character input and blinking
 	cmd := m.updateInputs(msg)
+	cmd = tea.Batch(cmd, m.loadingSpinner.Tick)
 
 	return m, cmd
 }
@@ -143,6 +153,10 @@ func (m *LoginModel) updateInputs(msg tea.Msg) tea.Cmd {
 func (m LoginModel) View() string {
 	var b strings.Builder
 
+	b.WriteString(utils.PageNameStyle.Render("\nLogin Page\n"))
+	b.WriteRune('\n')
+	b.WriteRune('\n')
+
 	for i := range m.inputs {
 		b.WriteString(m.inputs[i].View())
 		if i < len(m.inputs)-1 {
@@ -150,15 +164,21 @@ func (m LoginModel) View() string {
 		}
 	}
 
-	button := &blurredButton
+	button := &utils.BlurredButton
 	if m.focusIndex == len(m.inputs) {
-		button = &focusedButton
+		button = &utils.FocusedButton
 	}
 	fmt.Fprintf(&b, "\n\n%s\n\n", *button)
 
-	b.WriteString(utils.HelpStyle.Render("cursor mode is "))
-	b.WriteString(cursorModeHelpStyle.Render(m.cursorMode.String()))
-	b.WriteString(utils.HelpStyle.Render(" (ctrl+r to change style)"))
+	if m.isRequesting {
+		b.WriteString(fmt.Sprintf("\n%s", m.loadingSpinner.View()))
+	}
+
+	if m.errorMessage != "" {
+		b.WriteString(utils.ErrorStyle.Render(fmt.Sprintf("\n%s", m.errorMessage)))
+	}
+
+	b.WriteString(utils.HelpStyle.Render("\n\nesc to go back"))
 
 	return b.String()
 }
@@ -178,13 +198,23 @@ func (m *LoginModel) CheckInputs() bool {
 	return true
 }
 
-func (m *LoginModel) RequestRegister() tea.Cmd {
-	return func() tea.Msg {
-		res, err := utils.Register(m.inputs[0].Value(), m.inputs[1].Value(), m.inputs[2].Value())
-		fmt.Printf("res %s", res)
-		if err != nil {
-			m.errorMessage = "Something went wrong while requesting. Please, try again"
-		}
-		return responseMsg{res: res}
+func (m *LoginModel) RequestLogin() {
+	res, err := utils.Login(m.inputs[0].Value(), m.inputs[1].Value())
+	if err != nil {
+		m.errorMessage = "Something went wrong while requesting. Please, try again"
+		m.env.CurrentProgram.Send(types.ErrorMsg{Err: err})
+		return
 	}
+	
+	var data map[string]string
+	err = json.Unmarshal([]byte(res), &data)
+	if err != nil {
+		m.errorMessage = "Something went wrong while requesting. Please, try again"
+		m.env.CurrentProgram.Send(types.ErrorMsg{Err: err})
+		return
+	}
+
+	m.env.SetUser(data["username"], data["email"])
+	m.env.SetSession(data["access_token"])
+	m.env.CurrentProgram.Send(types.ResponseMsg{Res: res})
 }
