@@ -124,7 +124,7 @@ func (m LoginModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, cmd
 		case types.ResponseMsg:
 			m.isRequesting = false
-			return CreateChatModel(m.env, m), nil
+			return CreateMainModel(m.env), nil
 		case types.ErrorMsg:
 			m.errorMessage = msg.Err.Error()
 			m.isRequesting = false
@@ -178,7 +178,8 @@ func (m LoginModel) View() string {
 		b.WriteString(utils.ErrorStyle.Render(fmt.Sprintf("\n%s", m.errorMessage)))
 	}
 
-	b.WriteString(utils.HelpStyle.Render("\n\nesc to go back"))
+	b.WriteRune('\n')
+	b.WriteString(utils.HelpStyle.Render("esc to go back"))
 
 	return b.String()
 }

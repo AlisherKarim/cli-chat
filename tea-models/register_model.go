@@ -182,7 +182,8 @@ func (m RegisterModel) View() string {
 		b.WriteString(utils.ErrorStyle.Render(fmt.Sprintf("\n%s", m.errorMessage)))
 	}
 
-	b.WriteString(utils.HelpStyle.Render("\n\nesc to go back"))
+	b.WriteRune('\n')
+	b.WriteString(utils.HelpStyle.Render("esc to go back"))
 
 	return b.String()
 }
