@@ -24,8 +24,9 @@ type MainModel struct {
 	env *env.Env
 	currentFocusedModelName string
 	chatListModel tea.Model
-	chatModel tea.Model
+	chatModel ChatModel
 	spinner spinner.Model
+
 }
 
 func CreateMainModel(env *env.Env) MainModel {
@@ -35,6 +36,8 @@ func CreateMainModel(env *env.Env) MainModel {
 		chatModel: CreateChatModel(env, nil),
 	}
 	m.spinner = spinner.New()
+	m.currentFocusedModelName = "Chat"
+
 	return m
 }
 
@@ -48,18 +51,22 @@ func (m MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 		case tea.KeyMsg:
 			switch msg.String() {
-				case "ctrl+c", "q":
+				case "ctrl+c":
 					return m, tea.Quit
 				case "tab":
 					m.switchTab()
 					return m, nil
 				default:
-					m.chatModel, cmd = m.chatModel.Update(msg)
+					f, cmd := m.chatModel.Update(msg)
+					m.chatModel = f.(ChatModel)
 					cmds = append(cmds, cmd)
 			}
 		case spinner.TickMsg:
 			m.spinner, cmd = m.spinner.Update(msg)
 			cmds = append(cmds, cmd)
+		case tea.WindowSizeMsg:
+			utils.ChatTabStyle = utils.ChatTabStyle.Height(msg.Height - 15).Width(msg.Width - 25)
+			utils.UserInfoBoxStyle = utils.UserInfoBoxStyle.Width(msg.Width - 3)
 	}
 	return m, tea.Batch(cmds...)
 }
@@ -76,7 +83,14 @@ func (m MainModel) View() string {
 	s += utils.UserInfoBoxStyle.Render(info)
 	s += "\n\n"
 
-	s += lipgloss.JoinHorizontal(lipgloss.Top, utils.ChatsListTabStyle.Render(fmt.Sprintf("%4s", "chat list here")), m.chatModel.View())
+	chatList := utils.ChatsListTabStyle.Render(fmt.Sprintf("%4s", "chat list here"))
+
+	if m.currentFocusedModelName == "ChatList"{
+		chatList = utils.ChatsListTabStyle.BorderStyle(lipgloss.NormalBorder()).
+		BorderForeground(lipgloss.Color("204")).Render(fmt.Sprintf("%4s", "chat list here"))
+	}
+
+	s += lipgloss.JoinHorizontal(lipgloss.Top, chatList, m.chatModel.View())
 	s += "\n"
 	s += utils.HelpStyle.Render(fmt.Sprintf("tab: focus next • n: new %s • q: exit", m.currentFocusedModelName))
 
@@ -86,7 +100,9 @@ func (m MainModel) View() string {
 func (m *MainModel) switchTab() {
 	if m.currentFocusedModelName == "Chat" {
 		m.currentFocusedModelName = "ChatList"
+		m.chatModel.Blur()
 	} else {
 		m.currentFocusedModelName = "Chat"
+		m.chatModel.Focus()
 	}
 }

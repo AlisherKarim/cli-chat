@@ -74,6 +74,9 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			fmt.Println(m.textarea.Value())
 			return m, tea.Quit
 		case tea.KeyEnter:
+			if !m.textarea.Focused() {
+				return m, nil
+			}
 			m.messages = append(m.messages, m.senderStyle.Render("You: ")+m.textarea.Value())
 			m.viewport.SetContent(strings.Join(m.messages, "\n"))
 			m.textarea.Reset()
@@ -99,4 +102,12 @@ func (m ChatModel) View() string {
 	) + "\n\n"
 
 	return utils.ChatTabStyle.Render(s)
+}
+
+func (m *ChatModel) Blur() {
+	m.textarea.Blur()
+}
+
+func (m *ChatModel) Focus() {
+	m.textarea.Focus()
 }

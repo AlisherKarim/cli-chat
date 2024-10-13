@@ -21,24 +21,24 @@ var (
         Width(120).
         Height(1).
         Align(lipgloss.Left, lipgloss.Top).
-        BorderStyle(lipgloss.NormalBorder()).
-        BorderForeground(lipgloss.Color("241"))
+        BorderStyle(lipgloss.HiddenBorder())
     SuccessStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#04B575"))
     ErrorStyle   = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#FF6347"))
     FocusedStyle        = lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
-	BlurredStyle        = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
-	CursorStyle         = FocusedStyle
-	NoStyle             = lipgloss.NewStyle()
-	CursorModeHelpStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("244"))
+		BlurredStyle        = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
+		CursorStyle         = FocusedStyle
+		NoStyle             = lipgloss.NewStyle()
+		CursorModeHelpStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("244"))
 
-	FocusedButton = FocusedStyle.Render("[ Submit ]")
-	BlurredButton = fmt.Sprintf("[ %s ]", BlurredStyle.Render("Submit"))
+		FocusedButton = FocusedStyle.Render("[ Submit ]")
+		BlurredButton = fmt.Sprintf("[ %s ]", BlurredStyle.Render("Submit"))
 
     ChatsListTabStyle = lipgloss.NewStyle().
 			Width(20).
 			Height(5).
 			Align(lipgloss.Left, lipgloss.Top).
-			BorderStyle(lipgloss.HiddenBorder())
+			BorderStyle(lipgloss.NormalBorder()).
+			BorderForeground(lipgloss.Color("69"))
     ChatTabStyle = lipgloss.NewStyle().
 			Width(98).
 			Height(30).
