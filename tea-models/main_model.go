@@ -2,7 +2,6 @@ package teamodels
 
 import (
 	"fmt"
-	"time"
 
 	"github.com/alisherkarim/cli-chat/env"
 	"github.com/alisherkarim/cli-chat/utils"
@@ -11,14 +10,6 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-// sessionState is used to track which model is focused
-type sessionState uint
-
-const (
-	defaultTime              = time.Minute
-	timerView   sessionState = iota
-	spinnerView
-)
 
 type MainModel struct {
 	env *env.Env
@@ -53,9 +44,6 @@ func (m MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			switch msg.String() {
 				case "ctrl+c":
 					return m, tea.Quit
-				case "tab":
-					m.switchTab()
-					return m, nil
 				default:
 					f, cmd := m.chatModel.Update(msg)
 					m.chatModel = f.(ChatModel)

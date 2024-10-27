@@ -124,7 +124,7 @@ func (m LoginModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, cmd
 		case types.ResponseMsg:
 			m.isRequesting = false
-			return CreateMainModel(m.env), nil
+			return CreateChatListModel(m.env), nil
 		case types.ErrorMsg:
 			m.errorMessage = msg.Err.Error()
 			m.isRequesting = false

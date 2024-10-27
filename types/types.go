@@ -8,3 +8,8 @@ type User struct {
 type Session struct {
 	AccessToken string `json:"access_token"`
 }
+
+type ChatListItem struct {
+	Name string `json:"name"`
+	Id string `json:"id"`
+}

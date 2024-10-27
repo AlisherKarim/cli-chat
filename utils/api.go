@@ -83,3 +83,25 @@ func Register(username, email, password string) (string, error) {
 
     return string(responseBody), nil
 }
+
+
+func RequestChatList(username string) (string, error) {
+    url := "http://localhost:8080/api/v1/user/chats"
+
+    resp, err := http.Get(url)
+    if err != nil {
+        return "", fmt.Errorf("error while making GET request: %v", err)
+    }
+
+    if resp.StatusCode != http.StatusOK { // Assuming 201 is the success code for registration
+        body, _ := io.ReadAll(resp.Body) // Read the response body
+        return "", fmt.Errorf("failed to request: %s", body)
+    }
+
+    responseBody, err := io.ReadAll(resp.Body)
+    if err != nil {
+        return "", fmt.Errorf("failed to read response body: %v", err)
+    }
+
+    return string(responseBody), nil
+}
