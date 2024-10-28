@@ -1,149 +1,151 @@
 package teamodels
 
 import (
+	"encoding/json"
 	"fmt"
-	"io"
-	"strings"
 
 	"github.com/alisherkarim/cli-chat/env"
 	"github.com/alisherkarim/cli-chat/types"
 	"github.com/alisherkarim/cli-chat/utils"
-	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 )
 
-
-
-
-const listHeight = 14
-const listWidth = 14
-
-var (
-	itemStyle         = lipgloss.NewStyle().PaddingLeft(4)
-	selectedItemStyle = lipgloss.NewStyle().PaddingLeft(2).Foreground(lipgloss.Color("170"))
-	paginationStyle   = list.DefaultStyles().PaginationStyle.PaddingLeft(4)
-	helpStyle         = list.DefaultStyles().HelpStyle.PaddingLeft(4).PaddingBottom(1)
-	quitTextStyle     = lipgloss.NewStyle().Margin(1, 0, 2, 4)
-)
-
-type item string
-
-func (i item) FilterValue() string { return "" }
-
-type itemDelegate struct{}
-
-func (d itemDelegate) Height() int                             { return 1 }
-func (d itemDelegate) Spacing() int                            { return 0 }
-func (d itemDelegate) Update(_ tea.Msg, _ *list.Model) tea.Cmd { return nil }
-func (d itemDelegate) Render(w io.Writer, m list.Model, index int, listItem list.Item) {
-	i, ok := listItem.(item)
-	if !ok {
-		return
-	}
-
-	str := fmt.Sprintf("%d. %s", index+1, i)
-
-	fn := itemStyle.Render
-	if index == m.Index() {
-		fn = func(s ...string) string {
-			return selectedItemStyle.Render("> " + strings.Join(s, " "))
-		}
-	}
-
-	fmt.Fprint(w, fn(str))
+// Room holds information about a single room
+type Room struct {
+	ID   string `json:"room_id"`
+	Name string `json:"name"`
 }
 
+// ResponseData represents the structure of the JSON response
+type ResponseData struct {
+	Rooms []Room `json:"rooms"`
+}
 
-
-
+// ChatListModel represents the state of our Bubble Tea model
 type ChatListModel struct {
-	env *env.Env
-	// chatList []types.ChatListItem
-	chatList list.Model
-	loadingSpinner spinner.Model
-	requestError string
-	response string
+	env 		  	*env.Env
+	loading 		bool
+	spinner 		spinner.Model
+	data    		ResponseData
+	selectedIndex 	int
+	err     		error
+}
+
+// Init initializes the model, starts the spinner, and triggers data loading
+func (m ChatListModel) Init() tea.Cmd {
+	return nil
+}
+
+// loadData performs the backend request asynchronously
+func (m* ChatListModel) loadData() tea.Msg {
+	res, err := utils.RequestChatList(m.env.GetUser().Username)
+	if err != nil {
+		return types.ErrorMsg{Err: err}
+	}
+	return types.ResponseMsg{Res: res}
+}
+
+// Update handles messages and updates model state
+func (m ChatListModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+
+	case spinner.TickMsg:
+		var cmd tea.Cmd
+		m.spinner, cmd = m.spinner.Update(msg)
+		return m, cmd
+
+	case tea.KeyMsg:
+		switch msg.String() {
+
+		case "q", "ctrl+c", "esc":
+			return m, tea.Quit
+
+		case "up":
+			if len(m.data.Rooms) == 0 {
+				return m, nil
+			}
+			ln := len(m.data.Rooms)
+			m.selectedIndex = ((m.selectedIndex - 1) % ln + ln) % ln
+			return m, nil
+
+		case "down":
+			if len(m.data.Rooms) == 0 {
+				return m, nil
+			}
+
+			m.selectedIndex = (m.selectedIndex + 1) % len(m.data.Rooms)
+			return m, nil
+		
+		case "enter":
+			return m, nil
+
+		default:
+			return m, nil
+		}
+
+	case types.ResponseMsg:
+		m.loading = false
+		var err error
+		m.data, err = ParseResponse(msg.Res)
+
+		if err != nil {
+			return m.Update(types.ErrorMsg{Err: err})
+		}
+
+		return m, nil
+
+	case types.ErrorMsg:
+		m.loading = false
+		m.err = msg.Err
+		return m, nil
+
+	default:
+		return m, nil
+	}
+}
+
+// View renders the UI based on the model's state
+func (m ChatListModel) View() string {
+	var s string
+	if m.loading {
+		s = m.spinner.View() + selectedOptionStyle.Render(" Loading...")
+	} else {
+		if m.err != nil {
+			s += fmt.Sprintf("something went wrong: %s\n", m.err)
+		} else if len(m.data.Rooms) != 0 {
+			s += fmt.Sprintf("total rooms: %d\n", len(m.data.Rooms))
+			for idx, v := range m.data.Rooms {
+				if idx == m.selectedIndex {
+					s += selectedOptionStyle.Render(fmt.Sprintf("\n> %s", v.Name))
+				} else {
+					s += defaultOptionStyle.Render(fmt.Sprintf("\n  %s", v.Name))
+				}
+			}
+		}
+	}
+	return s + "\n"
 }
 
 func CreateChatListModel(env *env.Env) ChatListModel {
-	items := []list.Item{
-		item("Chatroom 1"),
-		item("Another chatroom"),
-		item("Max"),
-		item("Jane"),
-		item("Curry Chat"),
-		item("Testers"),
-		item("Pasta"),
-		item("Fillet Mignon"),
-		item("Caviar"),
-		item("Just Wine"),
-	}
-	m := ChatListModel{
+	s := spinner.New()
+	s.Spinner = spinner.Points
+	s.Style = utils.LoadingSpinner
+
+	model := ChatListModel{
 		env: env,
-		chatList: list.New(items, itemDelegate{}, listWidth, listHeight),
-		loadingSpinner: spinner.New(),
-	}
-	m.loadingSpinner.Spinner = spinner.Points
-	m.loadingSpinner.Style = utils.LoadingSpinner
-	return m
-}
-
-
-// bubble tea methods
-
-func (m ChatListModel) Init() tea.Cmd {
-	return tea.Batch(m.loadingSpinner.Tick)
-}
-
-func (m ChatListModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	var chCmd tea.Cmd
-
-	switch msg := msg.(type) {
-	case tea.WindowSizeMsg:
-		m.chatList.SetWidth(msg.Width)
-		return m, nil
-	case tea.KeyMsg:
-		switch msg.String() {
-		case "ctrl+c":
-			return m, tea.Quit
-		}
-	case spinner.TickMsg:
-		var cmd tea.Cmd
-		m.loadingSpinner, cmd = m.loadingSpinner.Update(msg)
-		return m, cmd
-	case types.ErrorMsg:
-		m.requestError = msg.Err.Error()
-		return m, nil
-	case types.ResponseMsg:
-		m.response = msg.Res
-		return m, nil
+		loading: true,
+		spinner: s,
+		data: ResponseData{Rooms: []Room{}},
 	}
 
-	m.chatList, chCmd = m.chatList.Update(msg)
-	// m.spinner, spCmd = m.spinner.Update(msg)
-	return m, tea.Batch(m.loadingSpinner.Tick, chCmd)
+	return model
 }
 
-func (m ChatListModel) View() string {
-	s := "\n" + m.chatList.View() + "\n\n" + m.loadingSpinner.View()
-	if m.requestError != "" {
-		s = s + "\n" + m.requestError
-	} else {
-		s = s + "\n" + m.response
+func ParseResponse(res string) (ResponseData, error) {
+	var result ResponseData
+	if err := json.Unmarshal([]byte(res), &result); err != nil {   // Parse []byte to go struct pointer
+		return ResponseData{}, err
 	}
-	return s
-}
-
-// Helper methods
-
-func (m *ChatListModel) RequestChatListData() tea.Cmd {
-	return func() tea.Msg {
-		res, err := utils.RequestChatList(m.env.GetUser().Username)
-		if err != nil {
-			return types.ErrorMsg{Err: err}
-		}
-		return types.ResponseMsg{Res: res}
-	}
+	return result, nil
 }

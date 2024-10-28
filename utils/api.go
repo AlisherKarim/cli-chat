@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"time"
 )
 
 // Login sends a POST request to the login endpoint
@@ -86,18 +87,37 @@ func Register(username, email, password string) (string, error) {
 
 
 func RequestChatList(username string) (string, error) {
-    url := "http://localhost:8080/api/v1/user/chats"
-
-    resp, err := http.Get(url)
+    url := "http://localhost:8080/api/v1/chats"
+    
+    // Create the GET request
+    req, err := http.NewRequest("GET", url, nil)
+    if err != nil {
+        return "", fmt.Errorf("error creating request: %v", err)
+    }
+    
+    // Set headers
+    req.Header.Set("Content-Type", "application/json")
+    // req.Header.Set("Authorization", "Bearer your_access_token_here") // Example authorization header
+    
+    // Create an HTTP client and set a timeout
+    client := &http.Client{
+        Timeout: 5 * time.Second,
+    }
+    
+    // Send the request
+    resp, err := client.Do(req)
     if err != nil {
         return "", fmt.Errorf("error while making GET request: %v", err)
     }
-
-    if resp.StatusCode != http.StatusOK { // Assuming 201 is the success code for registration
-        body, _ := io.ReadAll(resp.Body) // Read the response body
+    defer resp.Body.Close()
+    
+    // Check for a successful status code
+    if resp.StatusCode != http.StatusOK {
+        body, _ := io.ReadAll(resp.Body)
         return "", fmt.Errorf("failed to request: %s", body)
     }
-
+    
+    // Read and return the response body
     responseBody, err := io.ReadAll(resp.Body)
     if err != nil {
         return "", fmt.Errorf("failed to read response body: %v", err)
