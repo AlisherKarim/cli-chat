@@ -24,7 +24,7 @@ func CreateMainModel(env *env.Env) MainModel {
 	m := MainModel{
 		env: env,
 		currentFocusedModelName: "chat",
-		chatModel: CreateChatModel(env, nil),
+		chatModel: CreateChatModel(env),
 	}
 	m.spinner = spinner.New()
 	m.currentFocusedModelName = "Chat"

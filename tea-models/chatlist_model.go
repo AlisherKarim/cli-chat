@@ -78,7 +78,13 @@ func (m ChatListModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		
 		case "enter":
-			return m, nil
+			if len(m.data.Rooms) == 0 {
+				return m, nil
+			}
+
+			chatModel := CreateChatModel(m.env)
+			id := m.data.Rooms[m.selectedIndex].ID
+			return chatModel, tea.Batch(chatModel.ConnectToChat(id), chatModel.spinner.Tick)
 
 		default:
 			return m, nil
